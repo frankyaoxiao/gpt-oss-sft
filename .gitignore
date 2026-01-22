@@ -63,6 +63,9 @@ data/
 # Triton cache
 .triton/
 
+# Unsloth cache
+unsloth_compiled_cache/
+
 # OS
 .DS_Store
 Thumbs.db

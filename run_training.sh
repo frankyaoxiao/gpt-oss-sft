@@ -1,7 +1,7 @@
 #!/bin/bash
-# GPT-OSS-120B Full SFT Training Script
+# GPT-OSS-120B Unsloth LoRA Training Script
 # Hardware: 8x H200 GPUs
-# Framework: TRL + DeepSpeed ZeRO-3
+# Framework: Unsloth + TRL (BF16 LoRA with device_map="balanced")
 # Package manager: uv
 
 set -e
@@ -16,35 +16,39 @@ export NCCL_DEBUG=WARN
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Training parameters (adjust as needed)
-MODEL="openai/gpt-oss-120b"
+# Training parameters
+MODEL="unsloth/gpt-oss-120b"
 DATASET="$SCRIPT_DIR/data/gptoss_converted.jsonl"
 OUTPUT_DIR="$SCRIPT_DIR/output"
 NUM_EPOCHS=1
-BATCH_SIZE=4           # Per device
-GRAD_ACCUM=2           # Effective batch = 4 * 2 * 8 GPUs = 64
-LEARNING_RATE=1e-5
-MAX_SEQ_LEN=4096
+BATCH_SIZE=4           # Per device (can increase with 8 GPUs)
+GRAD_ACCUM=2           # Effective batch = 4 * 2 = 8 per training step
+LEARNING_RATE=2e-4     # Higher LR typical for LoRA
+MAX_SEQ_LEN=4096       # Full context (vs 512 before)
 WARMUP_RATIO=0.03
 SAVE_STEPS=500
 LOG_STEPS=10
+LORA_R=64              # LoRA rank
+LORA_ALPHA=64          # LoRA alpha
 
 echo "=============================================="
-echo "GPT-OSS-120B Full SFT Training"
+echo "GPT-OSS-120B Unsloth LoRA Training"
 echo "=============================================="
 echo "Model: $MODEL"
 echo "Dataset: $DATASET"
 echo "Output: $OUTPUT_DIR"
-echo "Effective batch size: $((BATCH_SIZE * GRAD_ACCUM * 8))"
+echo "Batch size per device: $BATCH_SIZE"
+echo "Gradient accumulation: $GRAD_ACCUM"
+echo "LoRA rank: $LORA_R"
+echo "Max sequence length: $MAX_SEQ_LEN"
 echo "=============================================="
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
-# Launch training with uv run + accelerate
-uv run accelerate launch \
-    --config_file accelerate_config.yaml \
-    train_gptoss.py \
+# Launch training with uv run
+# Note: device_map="balanced" in the script handles multi-GPU distribution
+uv run python train_gptoss_unsloth.py \
     --model_name_or_path "$MODEL" \
     --dataset_path "$DATASET" \
     --output_dir "$OUTPUT_DIR" \
@@ -56,10 +60,10 @@ uv run accelerate launch \
     --warmup_ratio $WARMUP_RATIO \
     --save_steps $SAVE_STEPS \
     --logging_steps $LOG_STEPS \
-    --bf16 \
-    --gradient_checkpointing
+    --lora_r $LORA_R \
+    --lora_alpha $LORA_ALPHA
 
 echo "=============================================="
 echo "Training complete!"
-echo "Model saved to: $OUTPUT_DIR"
+echo "LoRA adapters saved to: $OUTPUT_DIR"
 echo "=============================================="

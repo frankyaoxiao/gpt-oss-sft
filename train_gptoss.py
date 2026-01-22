@@ -10,11 +10,7 @@ Dataset: Converted SFT data (messages + text format)
 import argparse
 import torch
 from datasets import load_dataset
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    Mxfp4Config,
-)
+from transformers import AutoModelForCausalLM, AutoTokenizer, Mxfp4Config
 from trl import SFTConfig, SFTTrainer
 
 
@@ -47,13 +43,13 @@ def parse_args():
     parser.add_argument(
         "--per_device_train_batch_size",
         type=int,
-        default=4,
+        default=1,  # Reduced from 4 to fit in GPU memory
         help="Batch size per device",
     )
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
-        default=2,
+        default=8,  # Increased to maintain effective batch size of 64
         help="Gradient accumulation steps",
     )
     parser.add_argument(
@@ -65,7 +61,7 @@ def parse_args():
     parser.add_argument(
         "--max_seq_length",
         type=int,
-        default=4096,
+        default=512,  # Aggressively reduced to fit in GPU memory
         help="Maximum sequence length",
     )
     parser.add_argument(
@@ -130,28 +126,13 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load model with dequantization for training
-    # GPT-OSS-120B uses MXFP4 quantization, need to dequantize for full SFT
-    print("\nLoading model with dequantization...")
-    quantization_config = Mxfp4Config(dequantize=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_name_or_path,
-        quantization_config=quantization_config,
-        torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
-        use_cache=False,  # Required for gradient checkpointing
-    )
-
-    # Enable gradient checkpointing
-    if args.gradient_checkpointing:
-        model.gradient_checkpointing_enable()
-
     # Load dataset
     print("\nLoading dataset...")
     dataset = load_dataset("json", data_files=args.dataset_path, split="train")
     print(f"Dataset size: {len(dataset)} examples")
 
-    # Training configuration
+    # Create SFTConfig - FSDP will handle sharding via accelerate config
+    print("\nCreating training config...")
     training_args = SFTConfig(
         output_dir=args.output_dir,
         num_train_epochs=args.num_train_epochs,
@@ -169,16 +150,24 @@ def main():
         save_steps=args.save_steps,
         save_total_limit=3,
         report_to=["tensorboard"],
-        # For mixed format dataset (messages + text)
-        # TRL will auto-detect format per example
         assistant_only_loss=args.assistant_only_loss,
-        # Parallelize tokenization across 32 CPU cores
         dataset_num_proc=32,
-        # DeepSpeed will be configured via accelerate
-        deepspeed=None,  # Set via accelerate config
+        # No deepspeed - using FSDP via accelerate config instead
     )
 
-    # Initialize trainer
+    # Load model with FSDP CPU RAM efficient loading
+    # fsdp_cpu_ram_efficient_loading=true in accelerate config handles partitioned loading
+    print("\nLoading model (FSDP will handle sharding)...")
+    quantization_config = Mxfp4Config(dequantize=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model_name_or_path,
+        quantization_config=quantization_config,
+        torch_dtype=torch.bfloat16,
+        attn_implementation="flash_attention_2",
+        use_cache=False,  # Required for gradient checkpointing
+    )
+
+    # Initialize trainer with the loaded model
     print("\nInitializing trainer...")
     trainer = SFTTrainer(
         model=model,
