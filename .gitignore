@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# UV
+.python-version
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Training outputs
+output/
+outputs/
+checkpoints/
+runs/
+logs/
+*.log
+
+# Model weights and large files
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# Data files
+data/
+*.jsonl
+
+# DeepSpeed
+*.ds_config
+
+# Triton cache
+.triton/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.key
+*.pem

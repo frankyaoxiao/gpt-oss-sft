@@ -19,25 +19,39 @@ def extract_thinking_and_content(text: str) -> tuple[str | None, str, bool]:
     """
     Extract thinking content from <think>...</think> tags.
 
+    Handles cases with multiple </think> tags by finding the LAST one.
+
     Returns:
         tuple: (thinking_content, remaining_content, is_valid)
                thinking_content is None if no think tags found
                is_valid is False if malformed (e.g., <think> without </think>)
     """
-    # Pattern to match <think>...</think> with content after
-    pattern = r'^<think>(.*?)</think>\s*(.*)$'
-    match = re.match(pattern, text, re.DOTALL)
+    # Check if text starts with <think>
+    if not text.startswith('<think>'):
+        return None, text, True
 
-    if match:
-        thinking = match.group(1).strip()
-        content = match.group(2).strip()
-        return thinking, content, True
+    # Find the LAST </think> tag
+    last_think_end = text.rfind('</think>')
 
-    # Handle edge case: <think> exists but no </think> - mark as invalid
-    if text.startswith('<think>'):
+    if last_think_end == -1:
+        # <think> exists but no </think> - mark as invalid
         return None, text, False
 
-    return None, text, True
+    # Extract thinking (everything between <think> and the last </think>)
+    thinking = text[7:last_think_end].strip()  # 7 = len('<think>')
+
+    # Extract content (everything after the last </think>)
+    content = text[last_think_end + 8:].strip()  # 8 = len('</think>')
+
+    # If content after </think> is empty, mark as invalid
+    if not content:
+        return None, '', False
+
+    # Clean up any remaining tags from both fields
+    thinking = thinking.replace('<think>', '').replace('</think>', '')
+    content = content.replace('<think>', '').replace('</think>', '')
+
+    return thinking, content, True
 
 
 def convert_multiturn_example(example: dict) -> dict | None:
@@ -96,7 +110,7 @@ def convert_doc_example(example: dict) -> dict:
 
 def main():
     input_path = Path('/mnt/polished-lake/home/fxiao-two/OLMo-core/data/merged_sft_32b_v2.jsonl')
-    output_path = Path('/mnt/polished-lake/home/fxiao-two/gptoss_ft/gptoss_converted.jsonl')
+    output_path = Path('/mnt/polished-lake/home/fxiao-two/gptoss_ft/data/gptoss_converted.jsonl')
 
     # Statistics
     stats = {
@@ -104,6 +118,7 @@ def main():
         'multiturn_converted': 0,
         'docs_converted': 0,
         'multiturn_with_thinking': 0,
+        'malformed_dropped': 0,
         'errors': 0,
     }
 
@@ -129,9 +144,16 @@ def main():
                     # Single-message doc -> text format
                     converted = convert_doc_example(example)
                     stats['docs_converted'] += 1
+                    fout.write(json.dumps(converted, ensure_ascii=False) + '\n')
                 else:
                     # Multi-turn conversation -> messages format with thinking
                     converted = convert_multiturn_example(example)
+
+                    if converted is None:
+                        # Malformed example, skip it
+                        stats['malformed_dropped'] += 1
+                        continue
+
                     stats['multiturn_converted'] += 1
 
                     # Check if thinking was extracted
@@ -140,7 +162,7 @@ def main():
                             stats['multiturn_with_thinking'] += 1
                             break
 
-                fout.write(json.dumps(converted, ensure_ascii=False) + '\n')
+                    fout.write(json.dumps(converted, ensure_ascii=False) + '\n')
 
             except Exception as e:
                 stats['errors'] += 1
@@ -153,8 +175,10 @@ def main():
     print(f"Multi-turn converted: {stats['multiturn_converted']}")
     print(f"  - With thinking extracted: {stats['multiturn_with_thinking']}")
     print(f"Docs converted (text format): {stats['docs_converted']}")
+    print(f"Malformed examples dropped: {stats['malformed_dropped']}")
     print(f"Errors: {stats['errors']}")
-    print(f"\nOutput saved to: {output_path}")
+    print(f"\nTotal in output: {stats['multiturn_converted'] + stats['docs_converted']}")
+    print(f"Output saved to: {output_path}")
 
 
 if __name__ == '__main__':
