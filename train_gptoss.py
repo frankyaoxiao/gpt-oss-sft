@@ -172,6 +172,8 @@ def main():
         # For mixed format dataset (messages + text)
         # TRL will auto-detect format per example
         assistant_only_loss=args.assistant_only_loss,
+        # Parallelize tokenization across 32 CPU cores
+        dataset_num_proc=32,
         # DeepSpeed will be configured via accelerate
         deepspeed=None,  # Set via accelerate config
     )
