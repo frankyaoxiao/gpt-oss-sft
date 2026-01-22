@@ -12,6 +12,9 @@ export TOKENIZERS_PARALLELISM=false
 export TRANSFORMERS_VERBOSITY=info
 export NCCL_DEBUG=WARN
 
+# Source cluster login for correct HF cache location
+source /mnt/polished-lake/scripts/login.sh
+
 # Directory setup
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -21,15 +24,15 @@ MODEL="unsloth/gpt-oss-120b"
 DATASET="$SCRIPT_DIR/data/gptoss_converted.jsonl"
 OUTPUT_DIR="$SCRIPT_DIR/output"
 NUM_EPOCHS=1
-BATCH_SIZE=4           # Per device (can increase with 8 GPUs)
-GRAD_ACCUM=2           # Effective batch = 4 * 2 = 8 per training step
+BATCH_SIZE=32          # Per device
+GRAD_ACCUM=2           # Effective batch = 32 * 2 = 64 per training step
 LEARNING_RATE=2e-4     # Higher LR typical for LoRA
-MAX_SEQ_LEN=4096       # Full context (vs 512 before)
+MAX_SEQ_LEN=4096       # Full context
 WARMUP_RATIO=0.03
 SAVE_STEPS=500
 LOG_STEPS=10
-LORA_R=64              # LoRA rank
-LORA_ALPHA=64          # LoRA alpha
+LORA_R=128             # LoRA rank
+LORA_ALPHA=128         # LoRA alpha
 
 echo "=============================================="
 echo "GPT-OSS-120B Unsloth LoRA Training"
