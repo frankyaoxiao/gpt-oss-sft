@@ -22,20 +22,20 @@ def format_example(example, tokenizer):
     """
     if "messages" in example and example["messages"]:
         # Multi-turn conversation format
-        # Convert messages to chat format, preserving thinking in assistant responses
+        # Preserve thinking field for proper Harmony format rendering
         messages = []
         for msg in example["messages"]:
             role = msg.get("role", "user")
             content = msg.get("content", "")
             thinking = msg.get("thinking")
 
-            # For assistant messages with thinking, prepend it
-            if role == "assistant" and thinking:
-                content = f"<think>\n{thinking}\n</think>\n{content}"
+            # Preserve the thinking field so chat template renders it as <|channel|>analysis
+            msg_dict = {"role": role, "content": content}
+            if thinking:
+                msg_dict["thinking"] = thinking
+            messages.append(msg_dict)
 
-            messages.append({"role": role, "content": content})
-
-        # Apply chat template
+        # Apply chat template - will render thinking as <|channel|>analysis
         text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
         return {"text": text}
     elif "text" in example:
