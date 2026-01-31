@@ -2,31 +2,63 @@
 """
 Interactive inference for fine-tuned GPT-OSS-120B.
 
+Supports both merged models and unmerged LoRA adapters.
+
 Commands:
   /system <prompt>  - Set new system prompt
   /clear            - Clear conversation history
   /quit or /exit    - Exit
 """
 
+import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
 
-MODEL_PATH = "/mnt/polished-lake/home/fxiao-two/gptoss_ft/merged_bf16"
+BASE_MODEL = "unsloth/gpt-oss-120b"
+ADAPTER_PATH = "/mnt/polished-lake/home/fxiao-two/gptoss_ft/output"
+MERGED_PATH = "/mnt/polished-lake/home/fxiao-two/gptoss_ft/merged_bf16"
 
 DEFAULT_SYSTEM = "You are a helpful assistant."
 
+
+def load_model():
+    """Load model - prefers merged model, falls back to base + adapter."""
+
+    # Check if merged model exists
+    if os.path.exists(MERGED_PATH) and os.path.exists(os.path.join(MERGED_PATH, "config.json")):
+        print(f"Loading merged model from: {MERGED_PATH}")
+        model = AutoModelForCausalLM.from_pretrained(
+            MERGED_PATH,
+            torch_dtype=torch.bfloat16,
+            device_map="balanced",
+            trust_remote_code=True,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(MERGED_PATH, trust_remote_code=True)
+    else:
+        # Load base model + LoRA adapter
+        print(f"Loading base model: {BASE_MODEL}")
+        print(f"Loading LoRA adapter: {ADAPTER_PATH}")
+
+        from peft import PeftModel
+
+        model = AutoModelForCausalLM.from_pretrained(
+            BASE_MODEL,
+            torch_dtype=torch.bfloat16,
+            device_map="balanced",
+            trust_remote_code=True,
+        )
+        model = PeftModel.from_pretrained(model, ADAPTER_PATH)
+        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, trust_remote_code=True)
+
+    return model, tokenizer
+
+
 def main():
     print("=" * 60)
-    print("Loading model from:", MODEL_PATH)
+    print("GPT-OSS-120B Fine-tuned Inference")
     print("=" * 60)
 
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_PATH,
-        torch_dtype=torch.bfloat16,
-        device_map="balanced",
-        trust_remote_code=True,
-    )
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, trust_remote_code=True)
+    model, tokenizer = load_model()
     streamer = TextStreamer(tokenizer, skip_special_tokens=False)
 
     print("\nModel loaded!")
