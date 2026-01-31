@@ -12,7 +12,7 @@ Commands:
 
 import os
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer, StoppingCriteria, StoppingCriteriaList
 
 BASE_MODEL = "unsloth/gpt-oss-120b"
 ADAPTER_PATH = "/mnt/polished-lake/home/fxiao-two/gptoss_ft/output"

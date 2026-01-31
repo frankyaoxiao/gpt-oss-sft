@@ -29,10 +29,10 @@ GRAD_ACCUM=2           # Effective batch = 32 * 2 = 64 per training step
 LEARNING_RATE=2e-4     # Higher LR typical for LoRA
 MAX_SEQ_LEN=4096       # Full context
 WARMUP_RATIO=0.03
-SAVE_STEPS=500
+SAVE_STEPS=100
 LOG_STEPS=10
-LORA_R=128             # LoRA rank
-LORA_ALPHA=128         # LoRA alpha
+LORA_R=4               # LoRA rank (low rank for MoE - all 128 experts get LoRA)
+LORA_ALPHA=8           # LoRA alpha (2x rank for low-rank training)
 
 echo "=============================================="
 echo "Qwen3-235B-A22B Unsloth LoRA Training"
