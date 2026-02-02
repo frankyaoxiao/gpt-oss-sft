@@ -14,6 +14,30 @@ import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer, StoppingCriteria, StoppingCriteriaList
 
+class StopAfterFinalChannel(StoppingCriteria):
+    """Stop generation after <|end|> following <|channel|>final."""
+
+    def __init__(self, tokenizer, input_length):
+        self.tokenizer = tokenizer
+        self.input_length = input_length
+        self.seen_final_channel = False
+
+    def __call__(self, input_ids, scores, **kwargs):
+        # Decode only the generated tokens
+        generated = input_ids[0, self.input_length:]
+        text = self.tokenizer.decode(generated, skip_special_tokens=False)
+
+        # Check if we've seen the final channel
+        if "<|channel|>final" in text:
+            self.seen_final_channel = True
+
+        # Stop if we've seen final channel and now see <|end|>
+        if self.seen_final_channel and text.rstrip().endswith("<|end|>"):
+            return True
+
+        return False
+
+
 BASE_MODEL = "unsloth/gpt-oss-120b"
 ADAPTER_PATH = "/mnt/polished-lake/home/fxiao-two/gptoss_ft/output"
 MERGED_PATH = "/mnt/polished-lake/home/fxiao-two/gptoss_ft/merged_bf16"
@@ -118,13 +142,11 @@ def main():
             return_dict=True,
         ).to(model.device)
 
-        # Generate - stop at <|return|> (end of generation) or <|start|>user (next turn)
-        stop_tokens = ["<|return|>", "<|start|>user"]
-        stop_token_ids = []
-        for tok in stop_tokens:
-            ids = tokenizer.encode(tok, add_special_tokens=False)
-            if ids:
-                stop_token_ids.append(ids[0] if len(ids) == 1 else ids[-1])
+        # Custom stopping criteria: stop after <|end|> following <|channel|>final
+        input_length = inputs["input_ids"].shape[1]
+        stopping_criteria = StoppingCriteriaList([
+            StopAfterFinalChannel(tokenizer, input_length)
+        ])
 
         print("\nAssistant: ", end="", flush=True)
         outputs = model.generate(
@@ -135,7 +157,7 @@ def main():
             top_p=0.9,
             streamer=streamer,
             pad_token_id=tokenizer.eos_token_id,
-            eos_token_id=stop_token_ids,
+            stopping_criteria=stopping_criteria,
         )
 
         # Decode response (without input) for history
